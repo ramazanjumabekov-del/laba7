@@ -1,0 +1,55 @@
+name: Publish site
+
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  pages: write
+  id-token: write
+
+concurrency:
+  group: pages
+  cancel-in-progress: true
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Download project
+        uses: actions/checkout@v4
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+          cache-dependency-path: '**/package-lock.json'
+
+      - name: Find project folder
+        run: |
+          PROJECT_DIR="$(find . -mindepth 2 -maxdepth 4 -name package-lock.json -not -path '*/node_modules/*' -print -quit | xargs dirname)"
+          if [ -z "$PROJECT_DIR" ]; then
+            echo "Не найден package-lock.json"
+            exit 1
+          fi
+          echo "PROJECT_DIR=$PROJECT_DIR" >> "$GITHUB_ENV"
+
+      - name: Install packages
+        run: npm ci --prefix "$PROJECT_DIR"
+
+      - name: Build site
+        run: npm run build --prefix "$PROJECT_DIR" -- --base=/laba7/
+
+      - name: Configure Pages
+        uses: actions/configure-pages@v5
+
+      - name: Upload site
+        uses: actions/upload-pages-artifact@v3
+        with:
+          path: ${{ env.PROJECT_DIR }}/dist
+
+      - name: Publish site
+        uses: actions/deploy-pages@v4
